@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EXAMBRO SMP YPKKP 2026</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #0f172a; --accent: #3b82f6; --danger: #ef4444; --success: #10b981; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Poppins', sans-serif; background: #f8fafc; overflow: hidden; -webkit-user-select: none; user-select: none; }
+        
+        /* Halaman Login */
+        #login-page { 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; width: 100%; position: absolute; z-index: 100;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+        .card { background: white; padding: 25px; border-radius: 24px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px rgba(0,0,0,0.3); }
+        .school-logo { width: 80px; margin-bottom: 10px; }
+        .input-group { text-align: left; margin-bottom: 12px; }
+        label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; }
+        input, select { width: 100%; padding: 12px; margin-top: 5px; border: 2px solid #e2e8f0; border-radius: 12px; box-sizing: border-box; font-size: 14px; outline: none; }
+        input:focus { border-color: var(--accent); }
+        
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:active { transform: scale(0.98); }
+
+        /* Wadah Ujian */
+        #exam-container { display: none; width: 100vw; height: 100vh; position: relative; background: white; }
+        .exam-header { 
+            height: 65px; background: white; border-bottom: 2px solid #e2e8f0; 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 15px; 
+        }
+        .timer-badge { background: #fee2e2; color: var(--danger); padding: 5px 12px; border-radius: 8px; font-weight: bold; font-family: monospace; font-size: 16px; }
+        iframe { width: 100%; height: calc(100% - 67px); border: none; }
+
+        /* Overlay Peringatan */
+        #warning-overlay { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(15, 23, 42, 0.98); color: white; z-index: 9999; 
+            flex-direction: column; align-items: center; justify-content: center; text-align: center; 
+        }
+        .warning-box { background: white; color: black; padding: 30px; border-radius: 20px; width: 80%; max-width: 350px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-page">
+        <div class="card">
+            <img src="https://i.ibb.co.com/GfLt51Nk/logo.png" class="school-logo" alt="Logo">
+            <h2 style="margin: 0; font-size: 18px; color: #1e293b;">PSAJ SMP YPKKP 2026</h2>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 20px;">Ujian Terkunci (Exambro Mode)</p>
+            
+            <div class="input-group">
+                <label>Kelas</label>
+                <input type="text" id="siswa-kelas" placeholder="Contoh: 7A, 8, atau 9B" oninput="filterMapel()">
+            </div>
+
+            <div class="input-group">
+                <label>Pilih Mata Pelajaran</label>
+                <select id="select-mapel" onchange="cekJadwal()">
+                    <option value="">Pilih Kelas Dahulu</option>
+                </select>
+                <div id="jadwal-msg" style="font-size:11px; margin-top:5px;"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Identitas Peserta</label>
+                <input type="text" id="siswa-no" placeholder="Nomor Peserta">
+                <input type="text" id="siswa-nama" placeholder="Nama Lengkap" style="margin-top:10px;">
+            </div>
+
+            <button id="btn-start" class="btn btn-primary" onclick="requestStart()">MULAI UJIAN</button>
+        </div>
+    </div>
+
+    <div id="exam-container">
+        <div class="exam-header">
+            <div style="font-size: 11px; line-height: 1.2;">
+                <b id="display-user" style="color: var(--primary);"></b><br>
+                <span id="display-mapel" style="color: #64748b;"></span>
+            </div>
+            <div class="timer-badge" id="timer">00:00:00</div>
+            <button onclick="exitApp()" style="background:var(--success); color:white; border:none; padding:8px 15px; border-radius:10px; font-weight:bold; cursor:pointer;">SELESAI</button>
+        </div>
+        <iframe id="exam-frame" src="" allow="autoplay"></iframe>
+    </div>
+
+    <div id="warning-overlay">
+        <div class="warning-box">
+            <h1 style="color:var(--danger); margin:0;">PELANGGARAN!</h1>
+            <p style="color: #475569;">Terdeteksi upaya keluar dari aplikasi atau menekan tombol navigasi.</p>
+            <p style="font-size: 12px; font-weight: bold;">Kejadian ini telah dicatat oleh sistem!</p>
+            <button class="btn btn-primary" onclick="fixAndReturn()">KEMBALI KE UJIAN</button>
+        </div>
+    </div>
+
+    <script>
+        // DATA DATABASE DARI EXCEL ANDA
+        const PRESET_DATA = [
+            {target:"7", nama:"PABP", link:"https://bit.ly/ASASPAI7abc2526", tanggal:"2026-04-17", durasi:90},
+            {target:"7", nama:"Pend. Pancasila", link:"https://bit.ly/SAS1PP7", tanggal:"2026-04-17", durasi:90},
+            {target:"7", nama:"Bahasa Indonesia", link:"https://bit.ly/ASAS1-BI7ABC2526", tanggal:"2026-04-18", durasi:90},
+            {target:"7", nama:"Bahasa Inggris", link:"https://bit.ly/ASAS_ENGLISH7_2526", tanggal:"2026-04-18", durasi:120},
+            {target:"7", nama:"IPA", link:"https://bit.ly/ASASIPA_72526", tanggal:"2026-04-20", durasi:90},
+            {target:"7", nama:"IPS", link:"https://bit.ly/ASAS_IPS7Ganjil", tanggal:"2026-04-20", durasi:90},
+            {target:"7", nama:"Matematika", link:"https://bit.ly/ASASMTK7", tanggal:"2026-04-21", durasi:90},
+            {target:"7", nama:"PJOK", link:"https://forms.gle/wG9Rgi5rk5NqHffu9", tanggal:"2026-04-21", durasi:60},
+            {target:"7", nama:"SBDP", link:"https://bit.ly/AsasSenbud7_Agung25", tanggal:"2026-04-22", durasi:60},
+            {target:"7", nama:"Informatika", link:"https://bit.ly/ASASInformatika7251", tanggal:"2026-04-22", durasi:60},
+            {target:"7", nama:"Bahasa Sunda", link:"https://bit.ly/ASAS_BasaSunda_72526", tanggal:"2026-04-22", durasi:60},
+            {target:"8", nama:"PABP", link:"https://bit.ly/ASASPAIBP-82526", tanggal:"2026-04-17", durasi:90},
+            {target:"8", nama:"Pend. Pancasila", link:"https://bit.ly/SAS1PP8", tanggal:"2026-04-17", durasi:90},
+            {target:"8", nama:"Bahasa Indonesia", link:"https://bit.ly/ASAS1-BI8AB2526", tanggal:"2026-04-18", durasi:90},
+            {target:"8", nama:"Bahasa Inggris", link:"https://bit.ly/SASenglish8", tanggal:"2026-04-18", durasi:120},
+            {target:"8", nama:"IPA", link:"https://bit.ly/ASASIPA_82526", tanggal:"2026-04-20", durasi:90},
+            {target:"8", nama:"IPS", link:"https://bit.ly/ASAS_IPS8Ganjil", tanggal:"2026-04-20", durasi:90},
+            {target:"8", nama:"Matematika", link:"https://bit.ly/ASASMTK8", tanggal:"2026-04-21", durasi:90},
+            {target:"8", nama:"PJOK", link:"https://forms.gle/9B8A3v4uN6yE7rT8", tanggal:"2026-04-21", durasi:60},
+            {target:"8", nama:"SBDP", link:"https://bit.ly/AsasSenbud8_Agung25", tanggal:"2026-04-22", durasi:60},
+            {target:"8", nama:"Informatika", link:"https://bit.ly/ASASInformatika825", tanggal:"2026-04-22", durasi:60},
+            {target:"8", nama:"Bahasa Sunda", link:"https://bit.ly/ASAS_BasaSunda_82526", tanggal:"2026-04-22", durasi:60},
+            {target:"9", nama:"PABP", link:"https://bit.ly/ASASPAIBP-92526", tanggal:"2026-04-17", durasi:90},
+            {target:"9", nama:"Pend. Pancasila", link:"https://bit.ly/ASASPPKN9-2526", tanggal:"2026-04-17", durasi:90},
+            {target:"9", nama:"Bahasa Indonesia", link:"https://bit.ly/ASAS1-BI92526", tanggal:"2026-04-18", durasi:90},
+            {target:"9", nama:"Bahasa Inggris", link:"https://bit.ly/SAS9ENGLISH", tanggal:"2026-04-18", durasi:120},
+            {target:"9", nama:"IPA", link:"https://bit.ly/ASASIPA_92526", tanggal:"2026-04-20", durasi:90},
+            {target:"9", nama:"IPS", link:"https://bit.ly/ASAS_IPS9Ganjil", tanggal:"2026-04-20", durasi:90},
+            {target:"9", nama:"Matematika", link:"https://bit.ly/ASASMTK92526", tanggal:"2026-04-21", durasi:90},
+            {target:"9", nama:"PJOK", link:"https://forms.gle/4G9Rgi5rk5NqHffu9", tanggal:"2026-04-21", durasi:60},
+            {target:"9", nama:"SBDP", link:"https://bit.ly/AsasSenbud9_Agung25", tanggal:"2026-04-22", durasi:60},
+            {target:"9", nama:"Informatika", link:"https://bit.ly/ASASInformatika925", tanggal:"2026-04-22", durasi:60},
+            {target:"9", nama:"Bahasa Sunda", link:"https://bit.ly/ASAS_BasaSunda_92526", tanggal:"2026-04-22", durasi:60}
+        ];
+
+        let mapelFiltered = [];
+        let isExamActive = false;
+        let timerInt;
+
+        // Fungsi filter mapel berdasarkan input kelas
+        function filterMapel() {
+            const k = document.getElementById('siswa-kelas').value.toUpperCase().trim();
+            const sel = document.getElementById('select-mapel');
+            if(!k) { sel.innerHTML = "<option value=''>Ketik kelas...</option>"; return; }
+            
+            // Mencari yang cocok dengan awalan angka kelas (7, 8, atau 9)
+            mapelFiltered = PRESET_DATA.filter(m => k.startsWith(m.target));
+            
+            if(mapelFiltered.length > 0) {
+                sel.innerHTML = mapelFiltered.map((m, i) => `<option value="${i}">${m.nama}</option>`).join('');
+            } else {
+                sel.innerHTML = "<option value=''>Tidak ada jadwal</option>";
+            }
+            cekJadwal();
+        }
+
+        function cekJadwal() {
+            const idx = document.getElementById('select-mapel').value;
+            const msg = document.getElementById('jadwal-msg');
+            const btn = document.getElementById('btn-start');
+            if(idx === "" || !mapelFiltered[idx]) { msg.innerText = ""; return; }
+            
+            const hariIni = new Date().toLocaleDateString('en-CA');
+            if(hariIni !== mapelFiltered[idx].tanggal) {
+                msg.innerText = "⚠️ Jadwal Mapel Ini: " + mapelFiltered[idx].tanggal;
+                msg.style.color = "#ea580c";
+                btn.style.opacity = "0.5";
+            } else {
+                msg.innerText = "✅ Siap Dikerjakan";
+                msg.style.color = "#16a34a";
+                btn.style.opacity = "1";
+            }
+        }
+
+        // Mulai Ujian & Lockdown
+        function requestStart() {
+            const idx = document.getElementById('select-mapel').value;
+            const nama = document.getElementById('siswa-nama').value;
+            const nomor = document.getElementById('siswa-no').value;
+            const kelas = document.getElementById('siswa-kelas').value;
+            
+            if(idx === "" || !nama || !nomor || !kelas) return alert("Mohon lengkapi data!");
+            if(!mapelFiltered[idx].link) return alert("Link soal belum diatur!");
+
+            // Masuk mode Fullscreen paksa
+            const el = document.documentElement;
+            const rfs = el.requestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+            
+            rfs.call(el).then(() => {
+                isExamActive = true;
+                document.getElementById('login-page').style.display = 'none';
+                document.getElementById('exam-container').style.display = 'block';
+                document.getElementById('display-user').innerText = nama + " (" + kelas + ")";
+                document.getElementById('display-mapel').innerText = "Mata Pelajaran: " + mapelFiltered[idx].nama;
+                document.getElementById('exam-frame').src = mapelFiltered[idx].link;
+                
+                // Mulai Timer
+                let t = mapelFiltered[idx].durasi * 60;
+                timerInt = setInterval(() => {
+                    if(!isExamActive) return clearInterval(timerInt);
+                    let h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = t%60;
+                    document.getElementById('timer').innerText = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                    if(t-- <= 0) { alert("Waktu Habis!"); location.reload(); }
+                }, 1000);
+            }).catch(() => {
+                alert("Klik layar sekali lagi untuk memberikan izin Fullscreen.");
+            });
+        }
+
+        function exitApp() {
+            if(confirm("Apakah Anda sudah klik SUBMIT di Google Form dan ingin keluar?")) {
+                isExamActive = false;
+                if(document.exitFullscreen) document.exitFullscreen();
+                location.reload();
+            }
+        }
+
+        function triggerBreach() {
+            if(isExamActive) document.getElementById('warning-overlay').style.display = 'flex';
+        }
+
+        function fixAndReturn() {
+            const el = document.documentElement;
+            const rfs = el.requestFullscreen || el.webkitRequestFullScreen;
+            rfs.call(el);
+            document.getElementById('warning-overlay').style.display = 'none';
+        }
+
+        // BLOCKER KEAMANAN
+        document.addEventListener('visibilitychange', () => { if(document.hidden) triggerBreach(); });
+        document.addEventListener('fullscreenchange', () => { if(!document.fullscreenElement) triggerBreach(); });
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        window.onkeydown = function(e) {
+            if (isExamActive && (e.keyCode == 27 || e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 73))) {
+                e.preventDefault();
+                return false;
+            }
+        };
+    </script>
+</body>
+</html>
